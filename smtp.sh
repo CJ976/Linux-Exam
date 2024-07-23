@@ -1,44 +1,57 @@
 #!/bin/bash
 
-# Step 1: Install Postfix
+# Step 1: Ensure Postfix is installed
+echo "Step 1: Installing Postfix if not already installed..."
+sudo apt update
 sudo apt install -y postfix
 
-# Step 2: Navigate to the Postfix configuration folder
+# Step 2: Navigate to the /etc/postfix folder
+echo "Step 2: Navigating to /etc/postfix..."
 cd /etc/postfix
 
-# Step 3: Backup main.cf file
-sudo cp main.cf main.cf.backup
+# Step 3: Configure main.cf file
+echo "Step 3: Configuring main.cf..."
+sudo cp main.cf main.cf.backup  # Backup original main.cf
 
-# Step 4: Configure main.cf file
-sudo sed -i '/^relayhost = .*/d' main.cf  # Remove any existing relayhost entry
-sudo sed -i '/^myhostname = .*/d' main.cf  # Remove any existing myhostname entry
-sudo tee -a main.cf > /dev/null <<EOF
-# Gmail SMTP relay configuration
+# Ensure smtp_tls_security_level is set correctly
+sudo sed -i '/^smtp_tls_security_level\s*=/d' main.cf
+echo "smtp_tls_security_level = may" | sudo tee -a main.cf
+
+# Remove existing relayhost entries if they exist
+sudo sed -i '/^relayhost\s*=/d' main.cf
+
+# Append additional configuration settings
+sudo bash -c 'cat <<EOL >> main.cf
 relayhost = [smtp.gmail.com]:587
-smtp_tls_wrappermode = yes
-smtp_tls_security_level = encrypt
-smtp_tls_protocols = !SSLv2, !SSLv3, !TLSv1, !TLSv1.1
+myhostname = $(hostname -f)
 
-# SASL authentication
-smtp_sasl_auth_enable = yes
+# Location of sasl_passwd we saved
 smtp_sasl_password_maps = hash:/etc/postfix/sasl/sasl_passwd
+
+# Enables SASL authentication for postfix
+smtp_sasl_auth_enable = yes
+
+# Disallow methods that allow anonymous authentication
 smtp_sasl_security_options = noanonymous
-EOF
+EOL'
 
-# Step 5: Create sasl_passwd file under /etc/postfix/sasl/
+# Step 4: Create sasl_passwd file under /etc/postfix/sasl/
+echo "Step 4: Creating sasl_passwd file..."
 sudo mkdir -p /etc/postfix/sasl
-sudo tee /etc/postfix/sasl/sasl_passwd > /dev/null <<EOF
-[smtp.gmail.com]:587 pawan.sharma143600@gmail.com:hicg oeei yeaw snyy
-EOF
+echo "[smtp.gmail.com]:587 rcdelhi01@ignou.ac.in@gmail.com:wufw yoyx skgg xbmk" | sudo tee /etc/postfix/sasl/sasl_passwd > /dev/null
 
-# Step 6: Update permissions and hash the sasl_passwd file
-sudo chmod 400 /etc/postfix/sasl/sasl_passwd
+# Step 5: Postmap sasl_passwd and restart postfix service
+echo "Step 5: Updating Postfix configuration and restarting service..."
 sudo postmap /etc/postfix/sasl/sasl_passwd
-
-# Step 7: Restart Postfix service
 sudo systemctl restart postfix
 
-# Step 8: Send a test email
-echo "Test Mail" | mail -s "Postfix TEST" modim3912@gmail.com
+# Step 6: Send a test email
+echo "Step 6: Sending test email..."
 
-echo "Configuration completed and test email sent."
+# Prompt user for recipient email
+read -p "Enter recipient email address: " recipient_email
+
+# Send test email
+echo "Test Mail" | mail -s "Postfix TEST" "$recipient_email"
+
+echo "Setup completed. Check your email for the test message."
